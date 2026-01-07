@@ -1,52 +1,25 @@
 import React from "react";
 import { Tabs } from "expo-router";
-import { MaterialIcons } from "@expo/vector-icons";
 
-export default function TabLayout() {
+export default function TabsLayout() {
   return (
-    <Tabs
-      screenOptions={{
-        headerShown: false,
-        tabBarHideOnKeyboard: true,
-      }}
-    >
+    <Tabs screenOptions={{ headerShown: false }}>
+      <Tabs.Screen name="index" options={{ title: "Home" }} />
+      <Tabs.Screen name="calendar" options={{ title: "Calendar" }} />
+      <Tabs.Screen name="report" options={{ title: "Report" }} />
+      <Tabs.Screen name="profile" options={{ title: "Profile" }} />
+
+      {/* ✅ 탭바는 유지하되, 탭 버튼에서 숨김 */}
       <Tabs.Screen
-        name="index"
+        name="entry"
         options={{
-          title: "Home",
-          tabBarIcon: ({ color, size }) => (
-            <MaterialIcons name="home" color={color} size={size} />
-          ),
+          href: null, // 탭바에서 제거
         }}
       />
-
       <Tabs.Screen
-        name="calendar"
+        name="entry-detail"
         options={{
-          title: "Calendar",
-          tabBarIcon: ({ color, size }) => (
-            <MaterialIcons name="calendar-month" color={color} size={size} />
-          ),
-        }}
-      />
-
-      <Tabs.Screen
-        name="report"
-        options={{
-          title: "Report",
-          tabBarIcon: ({ color, size }) => (
-            <MaterialIcons name="insights" color={color} size={size} />
-          ),
-        }}
-      />
-
-      <Tabs.Screen
-        name="profile"
-        options={{
-          title: "Profile",
-          tabBarIcon: ({ color, size }) => (
-            <MaterialIcons name="person" color={color} size={size} />
-          ),
+          href: null, // 탭바에서 제거
         }}
       />
     </Tabs>

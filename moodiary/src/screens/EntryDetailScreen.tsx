@@ -26,26 +26,42 @@ export default function CalendarScreen() {
 
   const { data, isLoading } = useMonthSessions(user?.uid ?? null, month);
 
-  /** 날짜별 morning/evening 세션 맵 */
+  /**
+   * ✅ entryId 기준으로 morning / evening 판단
+   * entryId = YYYY-MM-DD_slot
+   */
   const dayMap = useMemo(() => {
-    const map: Record<string, { morning?: EntrySession; evening?: EntrySession }> =
-      {};
-    (data ?? []).forEach((s) => {
-      if (!map[s.date]) map[s.date] = {};
-      map[s.date][s.slot] = s;
+    const map: Record<
+      string,
+      { morning: boolean; evening: boolean }
+    > = {};
+
+    (data ?? []).forEach((s: EntrySession) => {
+      const [date, slot] = s.date && s.slot
+        ? [s.date, s.slot]
+        : s["entryId"]?.split("_") ?? [];
+
+      if (!date || !slot) return;
+
+      if (!map[date]) {
+        map[date] = { morning: false, evening: false };
+      }
+
+      if (slot === "morning") map[date].morning = true;
+      if (slot === "evening") map[date].evening = true;
     });
+
     return map;
   }, [data]);
 
-  /** 달력 그리드(앞 공백 포함) */
+  /** 달력 그리드 */
   const days = useMemo(() => {
     const start = dayjs(`${month}-01`);
     const end = start.endOf("month");
-    const firstDow = start.day(); // 0~6 (일~토)
+    const firstDow = start.day();
 
     const arr: Array<{ date?: string }> = [];
     for (let i = 0; i < firstDow; i++) arr.push({});
-
     for (let d = 1; d <= end.date(); d++) {
       arr.push({ date: start.date(d).format("YYYY-MM-DD") });
     }
@@ -71,25 +87,10 @@ export default function CalendarScreen() {
     });
   };
 
-  /** ✅ 미래 날짜 차단 + 슬롯별 이동 */
-  const onPressSlot = (date: string, slot: EntrySlot, hasData: boolean) => {
-    const isFuture = dayjs(date).isAfter(dayjs(), "day");
-    if (isFuture) return;
-
-    if (hasData) goDetail(date, slot);
-    else goEntry(date, slot);
-  };
-
   return (
     <View style={{ flex: 1, padding: 16 }}>
-      {/* 월 헤더 */}
-      <View
-        style={{
-          flexDirection: "row",
-          alignItems: "center",
-          marginBottom: 12,
-        }}
-      >
+      {/* Header */}
+      <View style={{ flexDirection: "row", alignItems: "center" }}>
         <IconButton icon="chevron-left" onPress={onPrev} />
         <Text variant="titleLarge" style={{ flex: 1, textAlign: "center" }}>
           {dayjs(month).format("YYYY년 M월")}
@@ -99,43 +100,49 @@ export default function CalendarScreen() {
 
       <Card>
         <Card.Content>
-          {/* 요일 헤더 */}
+          {/* Weekday */}
           <View style={{ flexDirection: "row" }}>
             {WEEKDAYS.map((w) => (
-              <View
-                key={w}
-                style={{ width: "14.28%", alignItems: "center" }}
-              >
+              <View key={w} style={{ width: "14.28%", alignItems: "center" }}>
                 <Text style={{ fontSize: 12, opacity: 0.6 }}>{w}</Text>
               </View>
             ))}
           </View>
 
           {isLoading ? (
-            <ActivityIndicator style={{ marginTop: 16 }} />
+            <ActivityIndicator />
           ) : (
             <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
               {days.map((d, idx) => {
                 if (!d.date)
                   return <View key={idx} style={{ width: "14.28%" }} />;
 
-                const stat = dayMap[d.date] ?? {};
-                const isToday = d.date === today;
+                const stat = dayMap[d.date] ?? {
+                  morning: false,
+                  evening: false,
+                };
+
+                const isFuture = dayjs(d.date).isAfter(today, "day");
                 const isPastOrToday = dayjs(d.date).isSameOrBefore(today);
-                const isFuture = dayjs(d.date).isAfter(dayjs(), "day");
+                const isToday = d.date === today;
+
+                const showAddMorning =
+                  isPastOrToday && !isFuture && !stat.morning;
+                const showAddEvening =
+                  isPastOrToday && !isFuture && !stat.evening;
 
                 return (
                   <View
                     key={d.date}
                     style={{
                       width: "14.28%",
-                      paddingVertical: 8,
                       alignItems: "center",
+                      paddingVertical: 8,
+                      opacity: isFuture ? 0.35 : 1,
                       gap: 4,
-                      opacity: isFuture ? 0.35 : 1, // 미래 날짜는 흐리게
                     }}
                   >
-                    {/* 날짜 (오늘 강조) */}
+                    {/* Date */}
                     <View
                       style={{
                         width: 26,
@@ -146,53 +153,58 @@ export default function CalendarScreen() {
                         justifyContent: "center",
                       }}
                     >
-                      <Text
-                        style={{
-                          fontSize: 12,
-                          color: isToday ? "#fff" : "#333",
-                        }}
-                      >
+                      <Text style={{ color: isToday ? "#fff" : "#333" }}>
                         {dayjs(d.date).date()}
                       </Text>
                     </View>
 
-                    {/* morning / evening 각각 클릭 */}
+                    {/* Dots */}
                     <View style={{ flexDirection: "row", gap: 6 }}>
-                      {/* morning */}
                       <Pressable
                         disabled={isFuture}
                         onPress={() =>
-                          onPressSlot(d.date!, "morning", !!stat.morning)
+                          stat.morning
+                            ? goDetail(d.date!, "morning")
+                            : goEntry(d.date!, "morning")
                         }
                       >
-                        <Text style={{ fontSize: 12 }}>
-                          {stat.morning ? "●" : "○"}
-                        </Text>
+                        <Text>{stat.morning ? "●" : "○"}</Text>
                       </Pressable>
 
-                      {/* evening */}
                       <Pressable
                         disabled={isFuture}
                         onPress={() =>
-                          onPressSlot(d.date!, "evening", !!stat.evening)
+                          stat.evening
+                            ? goDetail(d.date!, "evening")
+                            : goEntry(d.date!, "evening")
                         }
                       >
-                        <Text style={{ fontSize: 12 }}>
-                          {stat.evening ? "●" : "○"}
-                        </Text>
+                        <Text>{stat.evening ? "●" : "○"}</Text>
                       </Pressable>
                     </View>
 
-                    {/* ✅ 과거/오늘이면 저녁 CTA 노출 (저녁 미기록일 때) */}
-                    {isPastOrToday && !stat.evening && (
-                      <Button
-                        compact
-                        mode="text"
-                        disabled={isFuture}
-                        onPress={() => goEntry(d.date!, "evening")}
-                      >
-                        +저녁
-                      </Button>
+                    {/* CTA */}
+                    {(showAddMorning || showAddEvening) && (
+                      <View style={{ flexDirection: "row", gap: 4 }}>
+                        {showAddMorning && (
+                          <Button
+                            compact
+                            mode="text"
+                            onPress={() => goEntry(d.date!, "morning")}
+                          >
+                            +아침
+                          </Button>
+                        )}
+                        {showAddEvening && (
+                          <Button
+                            compact
+                            mode="text"
+                            onPress={() => goEntry(d.date!, "evening")}
+                          >
+                            +저녁
+                          </Button>
+                        )}
+                      </View>
                     )}
                   </View>
                 );
@@ -201,10 +213,6 @@ export default function CalendarScreen() {
           )}
         </Card.Content>
       </Card>
-
-      <Text style={{ marginTop: 12, opacity: 0.6 }}>
-        ○: 미기록 / ●: 기록됨 (좌: 아침, 우: 저녁) · 미래 날짜는 기록 불가
-      </Text>
     </View>
   );
 }

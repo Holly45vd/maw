@@ -4,15 +4,17 @@ import { PaperProvider } from "react-native-paper";
 import { QueryClientProvider } from "@tanstack/react-query";
 
 import { queryClient } from "./queryClient";
+import { AuthProvider } from "./AuthProvider";
 
 export default function AppProviders({ children }: PropsWithChildren) {
-  // 나중에 테마 커스터마이징 필요하면 여기서 theme 만들어 넣으면 됨
   const theme = useMemo(() => ({}), []);
 
   return (
     <SafeAreaProvider>
       <QueryClientProvider client={queryClient}>
-        <PaperProvider theme={theme as any}>{children}</PaperProvider>
+        <PaperProvider theme={theme as any}>
+          <AuthProvider>{children}</AuthProvider>
+        </PaperProvider>
       </QueryClientProvider>
     </SafeAreaProvider>
   );
