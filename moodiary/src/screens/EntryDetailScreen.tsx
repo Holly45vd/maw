@@ -1,218 +1,171 @@
-import React, { useMemo, useState } from "react";
-import { View, Pressable } from "react-native";
+// /workspaces/maw/moodiary/src/screens/EntryDetailScreen.tsx
+
+import React, { useMemo } from "react";
+import { ScrollView, View, Alert } from "react-native";
 import dayjs from "dayjs";
-import isSameOrBefore from "dayjs/plugin/isSameOrBefore";
-import {
-  Card,
-  Text,
-  IconButton,
-  ActivityIndicator,
-  Button,
-} from "react-native-paper";
-import { router } from "expo-router";
+import { useLocalSearchParams, router } from "expo-router";
+import { Button, Card, Chip, Divider, Text, ActivityIndicator } from "react-native-paper";
+import { useQueryClient } from "@tanstack/react-query";
 
 import { useAuth } from "../providers/AuthProvider";
-import { useMonthSessions } from "../query/useMonthSessions";
-import { EntrySession, EntrySlot } from "../core/types";
+import { useEntrySession } from "../query/useEntrySession";
+import { deleteSessionById } from "../firebase/diaryRepo";
+import type { EntrySlot } from "../core/types";
 
-dayjs.extend(isSameOrBefore);
+function safeString(v: unknown) {
+  return typeof v === "string" ? v : "";
+}
 
-const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
+function parseEntryId(entryId: string): { date: string; slot: EntrySlot | null } {
+  // entryId = YYYY-MM-DD_slot
+  const [date, slot] = entryId.split("_");
+  const s = slot === "morning" || slot === "evening" ? (slot as EntrySlot) : null;
+  return { date: date ?? "", slot: s };
+}
 
-export default function CalendarScreen() {
+export default function EntryDetailScreen() {
   const { user } = useAuth();
-  const today = dayjs().format("YYYY-MM-DD");
-  const [month, setMonth] = useState(dayjs().format("YYYY-MM"));
+  const qc = useQueryClient();
 
-  const { data, isLoading } = useMonthSessions(user?.uid ?? null, month);
+  const params = useLocalSearchParams();
+  const entryId = useMemo(() => safeString(params.entryId), [params.entryId]);
 
-  /**
-   * ✅ entryId 기준으로 morning / evening 판단
-   * entryId = YYYY-MM-DD_slot
-   */
-  const dayMap = useMemo(() => {
-    const map: Record<
-      string,
-      { morning: boolean; evening: boolean }
-    > = {};
+  const { date, slot } = useMemo(() => parseEntryId(entryId), [entryId]);
 
-    (data ?? []).forEach((s: EntrySession) => {
-      const [date, slot] = s.date && s.slot
-        ? [s.date, s.slot]
-        : s["entryId"]?.split("_") ?? [];
+  const { data: session, isLoading, isError } = useEntrySession(user?.uid ?? null, entryId || null);
 
-      if (!date || !slot) return;
+  const title = useMemo(() => {
+    if (!date || !slot) return "기록 상세";
+    const slotLabel = slot === "morning" ? "오전" : "오후";
+    return `${dayjs(date).format("YYYY.MM.DD")} · ${slotLabel}`;
+  }, [date, slot]);
 
-      if (!map[date]) {
-        map[date] = { morning: false, evening: false };
-      }
-
-      if (slot === "morning") map[date].morning = true;
-      if (slot === "evening") map[date].evening = true;
-    });
-
-    return map;
-  }, [data]);
-
-  /** 달력 그리드 */
-  const days = useMemo(() => {
-    const start = dayjs(`${month}-01`);
-    const end = start.endOf("month");
-    const firstDow = start.day();
-
-    const arr: Array<{ date?: string }> = [];
-    for (let i = 0; i < firstDow; i++) arr.push({});
-    for (let d = 1; d <= end.date(); d++) {
-      arr.push({ date: start.date(d).format("YYYY-MM-DD") });
-    }
-    return arr;
-  }, [month]);
-
-  const onPrev = () =>
-    setMonth(dayjs(month).subtract(1, "month").format("YYYY-MM"));
-  const onNext = () =>
-    setMonth(dayjs(month).add(1, "month").format("YYYY-MM"));
-
-  const goEntry = (date: string, slot: EntrySlot) => {
+  const onEdit = () => {
+    if (!date || !slot) return;
     router.push({
       pathname: "/(tabs)/entry",
       params: { date, slot },
     });
   };
 
-  const goDetail = (date: string, slot: EntrySlot) => {
-    router.push({
-      pathname: "/(tabs)/entry-detail",
-      params: { entryId: `${date}_${slot}` },
-    });
+  const onDelete = () => {
+    if (!user?.uid || !entryId) return;
+
+    Alert.alert("기록 삭제", "이 기록을 삭제할까? (복구 불가)", [
+      { text: "취소", style: "cancel" },
+      {
+        text: "삭제",
+        style: "destructive",
+        onPress: async () => {
+          await deleteSessionById(user.uid, entryId);
+
+          // ✅ 관련 캐시 무효화 (홈/캘린더/리포트 전부 영향)
+          if (date) {
+            qc.invalidateQueries({ queryKey: ["todaySessions", user.uid, date] });
+            qc.invalidateQueries({ queryKey: ["entrySession", user.uid, entryId] });
+          }
+          // month 값은 파라미터로 모르는 경우가 많으니 prefix로 쏴버림(간단/안전)
+          qc.invalidateQueries({ queryKey: ["monthSessions", user.uid] });
+          qc.invalidateQueries({ queryKey: ["reportSessions", user.uid] });
+
+          // ✅ 보통 삭제 후엔 캘린더로
+          router.replace({
+            pathname: "/(tabs)/calendar",
+            params: { date },
+          });
+        },
+      },
+    ]);
   };
 
   return (
-    <View style={{ flex: 1, padding: 16 }}>
-      {/* Header */}
-      <View style={{ flexDirection: "row", alignItems: "center" }}>
-        <IconButton icon="chevron-left" onPress={onPrev} />
-        <Text variant="titleLarge" style={{ flex: 1, textAlign: "center" }}>
-          {dayjs(month).format("YYYY년 M월")}
-        </Text>
-        <IconButton icon="chevron-right" onPress={onNext} />
+    <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
+      <View style={{ gap: 4 }}>
+        <Text style={{ opacity: 0.65 }}>Entry Detail</Text>
+        <Text variant="headlineSmall">{title}</Text>
       </View>
 
-      <Card>
-        <Card.Content>
-          {/* Weekday */}
-          <View style={{ flexDirection: "row" }}>
-            {WEEKDAYS.map((w) => (
-              <View key={w} style={{ width: "14.28%", alignItems: "center" }}>
-                <Text style={{ fontSize: 12, opacity: 0.6 }}>{w}</Text>
+      {isLoading ? (
+        <Card>
+          <Card.Content style={{ gap: 10 }}>
+            <ActivityIndicator />
+            <Text style={{ opacity: 0.7 }}>불러오는 중...</Text>
+          </Card.Content>
+        </Card>
+      ) : isError ? (
+        <Card>
+          <Card.Content style={{ gap: 10 }}>
+            <Text variant="titleMedium">에러</Text>
+            <Text style={{ opacity: 0.7 }}>기록을 불러오지 못했어.</Text>
+            <Button mode="contained" onPress={() => router.back()}>
+              뒤로
+            </Button>
+          </Card.Content>
+        </Card>
+      ) : !session ? (
+        <Card>
+          <Card.Content style={{ gap: 10 }}>
+            <Text variant="titleMedium">기록 없음</Text>
+            <Text style={{ opacity: 0.7 }}>
+              해당 기록이 존재하지 않아. 삭제됐거나 entryId가 잘못됐을 수 있어.
+            </Text>
+            <Button mode="contained" onPress={() => router.back()}>
+              뒤로
+            </Button>
+          </Card.Content>
+        </Card>
+      ) : (
+        <>
+          <Card>
+            <Card.Content style={{ gap: 10 }}>
+              <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                <Chip icon="flash">energy: {session.energy}</Chip>
+                <Chip icon="emoticon-outline">mood: {session.mood}</Chip>
+                <Chip icon="tag-outline">topic: {session.topic || "—"}</Chip>
               </View>
-            ))}
+
+              <Divider />
+
+              <View style={{ gap: 6 }}>
+                <Text variant="titleMedium">노트</Text>
+                <Text style={{ opacity: 0.8 }}>
+                  {session.note && session.note.trim().length > 0 ? session.note : "—"}
+                </Text>
+              </View>
+
+              <Divider />
+
+              <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
+                <Text style={{ opacity: 0.6 }}>
+                  created:{" "}
+                  {session.createdAt?.toDate
+                    ? dayjs(session.createdAt.toDate()).format("YYYY.MM.DD HH:mm")
+                    : "—"}
+                </Text>
+                <Text style={{ opacity: 0.6 }}>
+                  updated:{" "}
+                  {session.updatedAt?.toDate
+                    ? dayjs(session.updatedAt.toDate()).format("YYYY.MM.DD HH:mm")
+                    : "—"}
+                </Text>
+              </View>
+            </Card.Content>
+          </Card>
+
+          <View style={{ flexDirection: "row", gap: 10 }}>
+            <Button mode="contained" style={{ flex: 1 }} onPress={onEdit}>
+              수정하기
+            </Button>
+            <Button mode="outlined" style={{ flex: 1 }} onPress={onDelete}>
+              삭제하기
+            </Button>
           </View>
 
-          {isLoading ? (
-            <ActivityIndicator />
-          ) : (
-            <View style={{ flexDirection: "row", flexWrap: "wrap" }}>
-              {days.map((d, idx) => {
-                if (!d.date)
-                  return <View key={idx} style={{ width: "14.28%" }} />;
-
-                const stat = dayMap[d.date] ?? {
-                  morning: false,
-                  evening: false,
-                };
-
-                const isFuture = dayjs(d.date).isAfter(today, "day");
-                const isPastOrToday = dayjs(d.date).isSameOrBefore(today);
-                const isToday = d.date === today;
-
-                const showAddMorning =
-                  isPastOrToday && !isFuture && !stat.morning;
-                const showAddEvening =
-                  isPastOrToday && !isFuture && !stat.evening;
-
-                return (
-                  <View
-                    key={d.date}
-                    style={{
-                      width: "14.28%",
-                      alignItems: "center",
-                      paddingVertical: 8,
-                      opacity: isFuture ? 0.35 : 1,
-                      gap: 4,
-                    }}
-                  >
-                    {/* Date */}
-                    <View
-                      style={{
-                        width: 26,
-                        height: 26,
-                        borderRadius: 13,
-                        backgroundColor: isToday ? "#1976D2" : "transparent",
-                        alignItems: "center",
-                        justifyContent: "center",
-                      }}
-                    >
-                      <Text style={{ color: isToday ? "#fff" : "#333" }}>
-                        {dayjs(d.date).date()}
-                      </Text>
-                    </View>
-
-                    {/* Dots */}
-                    <View style={{ flexDirection: "row", gap: 6 }}>
-                      <Pressable
-                        disabled={isFuture}
-                        onPress={() =>
-                          stat.morning
-                            ? goDetail(d.date!, "morning")
-                            : goEntry(d.date!, "morning")
-                        }
-                      >
-                        <Text>{stat.morning ? "●" : "○"}</Text>
-                      </Pressable>
-
-                      <Pressable
-                        disabled={isFuture}
-                        onPress={() =>
-                          stat.evening
-                            ? goDetail(d.date!, "evening")
-                            : goEntry(d.date!, "evening")
-                        }
-                      >
-                        <Text>{stat.evening ? "●" : "○"}</Text>
-                      </Pressable>
-                    </View>
-
-                    {/* CTA */}
-                    {(showAddMorning || showAddEvening) && (
-                      <View style={{ flexDirection: "row", gap: 4 }}>
-                        {showAddMorning && (
-                          <Button
-                            compact
-                            mode="text"
-                            onPress={() => goEntry(d.date!, "morning")}
-                          >
-                            +아침
-                          </Button>
-                        )}
-                        {showAddEvening && (
-                          <Button
-                            compact
-                            mode="text"
-                            onPress={() => goEntry(d.date!, "evening")}
-                          >
-                            +저녁
-                          </Button>
-                        )}
-                      </View>
-                    )}
-                  </View>
-                );
-              })}
-            </View>
-          )}
-        </Card.Content>
-      </Card>
-    </View>
+          <Button mode="text" onPress={() => router.back()}>
+            뒤로가기
+          </Button>
+        </>
+      )}
+    </ScrollView>
   );
 }

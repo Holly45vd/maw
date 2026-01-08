@@ -1,2 +1,2 @@
-import CalendarScreen from "../../src/screens/CalendarScreen";
+import CalendarScreen from "../../src/screens/calendar/CalendarScreen";
 export default CalendarScreen;

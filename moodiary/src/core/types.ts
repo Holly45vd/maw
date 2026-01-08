@@ -14,16 +14,25 @@ export type MoodKey =
   | "good"
   | "very_good";
 
-/**
- * 핵심 도메인: 하루의 한 세션 (아침 or 저녁)
- */
 export type EntrySession = {
-  date: string; // YYYY-MM-DD (로컬 기준)
+  date: string; // YYYY-MM-DD
   slot: EntrySlot;
 
   mood: MoodKey;
   energy: EnergyLevel;
+
+  /**
+   * ✅ v2: 복수 선택 토픽(권장)
+   * - UI가 아직 단일 선택이어도 저장 시 topics: [topic] 형태로 넣어두면 호환 쉬움
+   */
+  topics?: string[];
+
+  /**
+   * ✅ v1 레거시(당장 삭제 금지)
+   * - 기존 데이터/화면 호환 유지용
+   */
   topic: string;
+
   note?: string;
 
   createdAt: any; // Firestore Timestamp
