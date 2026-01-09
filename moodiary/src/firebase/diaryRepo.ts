@@ -8,15 +8,17 @@ import {
   serverTimestamp,
   collection,
   query,
-  where, orderBy,getDocs, 
+  where,
+  orderBy,
+  getDocs,
 } from "firebase/firestore";
-
-
 
 import { db } from "./firebase";
 import {
   EntrySession,
   EntrySlot,
+  ISODate,
+  EntryId,
   makeEntryId,
 } from "../core/types";
 
@@ -27,7 +29,7 @@ import {
  */
 
 /** users/{uid}/entries/{entryId} */
-function entryDocRef(uid: string, entryId: string) {
+function entryDocRef(uid: string, entryId: EntryId) {
   return doc(db, "users", uid, "entries", entryId);
 }
 
@@ -37,21 +39,20 @@ function entryDocRef(uid: string, entryId: string) {
  * =========================
  */
 
-/** 날짜 + 슬롯으로 조회 */
+/** (레거시) 날짜 + 슬롯으로 조회 → 내부에서 entryId로 변환 */
 export async function getSession(
   uid: string,
-  date: string,
+  date: ISODate,
   slot: EntrySlot
 ): Promise<EntrySession | null> {
   const entryId = makeEntryId(date, slot);
-  const snap = await getDoc(entryDocRef(uid, entryId));
-  return snap.exists() ? (snap.data() as EntrySession) : null;
+  return getSessionById(uid, entryId);
 }
 
-/** entryId 직접 조회 (디테일 페이지용) */
+/** ✅ entryId 직접 조회 (표준) */
 export async function getSessionById(
   uid: string,
-  entryId: string
+  entryId: EntryId
 ): Promise<EntrySession | null> {
   const snap = await getDoc(entryDocRef(uid, entryId));
   return snap.exists() ? (snap.data() as EntrySession) : null;
@@ -71,7 +72,7 @@ export async function getSessionById(
 export async function upsertSession(
   uid: string,
   input: Omit<EntrySession, "createdAt" | "updatedAt">
-) {
+): Promise<EntryId> {
   const { date, slot } = input;
   const entryId = makeEntryId(date, slot);
   const ref = entryDocRef(uid, entryId);
@@ -81,11 +82,12 @@ export async function upsertSession(
 
   const payload: EntrySession = {
     ...input,
-    createdAt: snap.exists() ? snap.data()?.createdAt : now,
+    createdAt: snap.exists() ? (snap.data() as any)?.createdAt : now,
     updatedAt: now,
   };
 
   await setDoc(ref, payload, { merge: true });
+  return entryId;
 }
 
 /**
@@ -94,32 +96,48 @@ export async function upsertSession(
  * =========================
  */
 
-/** entryId 기준 삭제 */
+/** ✅ entryId 기준 삭제 (표준) */
 export async function deleteSessionById(
   uid: string,
-  entryId: string
+  entryId: EntryId
 ): Promise<void> {
   await deleteDoc(entryDocRef(uid, entryId));
 }
 
+/** (레거시) date+slot 삭제 → 내부에서 entryId로 변환 */
+export async function deleteSession(
+  uid: string,
+  date: ISODate,
+  slot: EntrySlot
+): Promise<void> {
+  const entryId = makeEntryId(date, slot);
+  await deleteSessionById(uid, entryId);
+}
+
+/**
+ * =========================
+ * List
+ * =========================
+ */
+
 /**
  * 기간 조회: users/{uid}/entries
- * - date: "YYYY-MM-DD" 문자열 기반
+ * - date: "YYYY-MM-DD" 문자열 기반 (ISODate)
  */
 export async function listSessionsByRange(
   uid: string,
-  startDate: string,
-  endDate: string
+  startDate: ISODate,
+  endDate: ISODate
 ): Promise<EntrySession[]> {
   const col = collection(db, "users", uid, "entries");
 
-  const q = query(
+  const qy = query(
     col,
     where("date", ">=", startDate),
     where("date", "<=", endDate),
     orderBy("date", "asc")
   );
 
-  const snap = await getDocs(q);
+  const snap = await getDocs(qy);
   return snap.docs.map((d) => d.data() as EntrySession);
 }

@@ -4,23 +4,33 @@ import React, { useMemo } from "react";
 import { ScrollView, View, Alert } from "react-native";
 import dayjs from "dayjs";
 import { useLocalSearchParams, router } from "expo-router";
-import { Button, Card, Chip, Divider, Text, ActivityIndicator } from "react-native-paper";
+import {
+  Button,
+  Card,
+  Chip,
+  Divider,
+  Text,
+  ActivityIndicator,
+} from "react-native-paper";
 import { useQueryClient } from "@tanstack/react-query";
 
 import { useAuth } from "../providers/AuthProvider";
 import { useEntrySession } from "../query/useEntrySession";
 import { deleteSessionById } from "../firebase/diaryRepo";
-import type { EntrySlot } from "../core/types";
+import { EntryId, EntrySlot, ISODate, parseEntryId } from "../core/types";
 
 function safeString(v: unknown) {
   return typeof v === "string" ? v : "";
 }
 
-function parseEntryId(entryId: string): { date: string; slot: EntrySlot | null } {
-  // entryId = YYYY-MM-DD_slot
-  const [date, slot] = entryId.split("_");
-  const s = slot === "morning" || slot === "evening" ? (slot as EntrySlot) : null;
-  return { date: date ?? "", slot: s };
+function cleanTopics(input: unknown): string[] {
+  if (Array.isArray(input)) {
+    const cleaned = input
+      .map((t) => String(t ?? "").trim())
+      .filter(Boolean);
+    return Array.from(new Set(cleaned));
+  }
+  return [];
 }
 
 export default function EntryDetailScreen() {
@@ -28,11 +38,25 @@ export default function EntryDetailScreen() {
   const qc = useQueryClient();
 
   const params = useLocalSearchParams();
-  const entryId = useMemo(() => safeString(params.entryId), [params.entryId]);
 
-  const { date, slot } = useMemo(() => parseEntryId(entryId), [entryId]);
+  // ✅ entryId 파라미터
+  const entryIdRaw = useMemo(() => safeString(params.entryId), [params.entryId]);
 
-  const { data: session, isLoading, isError } = useEntrySession(user?.uid ?? null, entryId || null);
+  // ✅ core/types의 파서로 통일
+  const parsed = useMemo(() => parseEntryId(entryIdRaw), [entryIdRaw]);
+
+  const date = parsed.date as ISODate | null;
+  const slot = parsed.slot as EntrySlot | null;
+
+  // ✅ 유효한 entryId만 훅에 전달
+  const entryId: EntryId | null = useMemo(() => {
+    return date && slot ? (entryIdRaw as EntryId) : null;
+  }, [entryIdRaw, date, slot]);
+
+  const { data: session, isLoading, isError } = useEntrySession(
+    user?.uid ?? null,
+    entryId
+  );
 
   const title = useMemo(() => {
     if (!date || !slot) return "기록 상세";
@@ -40,16 +64,25 @@ export default function EntryDetailScreen() {
     return `${dayjs(date).format("YYYY.MM.DD")} · ${slotLabel}`;
   }, [date, slot]);
 
+  // ✅ 멀티 토픽 표시용 (topics 우선, 없으면 topic 승격)
+  const topics = useMemo(() => {
+    const fromTopics = cleanTopics((session as any)?.topics);
+    if (fromTopics.length > 0) return fromTopics;
+
+    const legacy = typeof (session as any)?.topic === "string" ? (session as any).topic.trim() : "";
+    return legacy ? [legacy] : [];
+  }, [session]);
+
   const onEdit = () => {
     if (!date || !slot) return;
     router.push({
-      pathname: "/(tabs)/entry",
+      pathname: "/entry",
       params: { date, slot },
     });
   };
 
   const onDelete = () => {
-    if (!user?.uid || !entryId) return;
+    if (!user?.uid || !entryId || !date) return;
 
     Alert.alert("기록 삭제", "이 기록을 삭제할까? (복구 불가)", [
       { text: "취소", style: "cancel" },
@@ -59,18 +92,13 @@ export default function EntryDetailScreen() {
         onPress: async () => {
           await deleteSessionById(user.uid, entryId);
 
-          // ✅ 관련 캐시 무효화 (홈/캘린더/리포트 전부 영향)
-          if (date) {
-            qc.invalidateQueries({ queryKey: ["todaySessions", user.uid, date] });
-            qc.invalidateQueries({ queryKey: ["entrySession", user.uid, entryId] });
-          }
-          // month 값은 파라미터로 모르는 경우가 많으니 prefix로 쏴버림(간단/안전)
+          qc.invalidateQueries({ queryKey: ["entrySession", user.uid, entryId] });
+          qc.invalidateQueries({ queryKey: ["todaySessions", user.uid, date] });
           qc.invalidateQueries({ queryKey: ["monthSessions", user.uid] });
           qc.invalidateQueries({ queryKey: ["reportSessions", user.uid] });
 
-          // ✅ 보통 삭제 후엔 캘린더로
           router.replace({
-            pathname: "/(tabs)/calendar",
+            pathname: "/calendar",
             params: { date },
           });
         },
@@ -118,10 +146,28 @@ export default function EntryDetailScreen() {
         <>
           <Card>
             <Card.Content style={{ gap: 10 }}>
+              {/* ✅ 핵심: topics 전체 표시 */}
               <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
                 <Chip icon="flash">energy: {session.energy}</Chip>
                 <Chip icon="emoticon-outline">mood: {session.mood}</Chip>
-                <Chip icon="tag-outline">topic: {session.topic || "—"}</Chip>
+              </View>
+
+              <Divider />
+
+              <View style={{ gap: 6 }}>
+                <Text variant="titleMedium">토픽</Text>
+
+                {topics.length > 0 ? (
+                  <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                    {topics.map((t) => (
+                      <Chip key={t} icon="tag-outline">
+                        {t}
+                      </Chip>
+                    ))}
+                  </View>
+                ) : (
+                  <Text style={{ opacity: 0.7 }}>—</Text>
+                )}
               </View>
 
               <Divider />

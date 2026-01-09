@@ -12,13 +12,23 @@ import {
   TextInput,
   SegmentedButtons,
   Snackbar,
+  IconButton,
 } from "react-native-paper";
 import { useQueryClient } from "@tanstack/react-query";
 
 import { useAuth } from "../providers/AuthProvider";
 import { useEntrySession } from "../query/useEntrySession";
-import { upsertSession, deleteSession } from "../firebase/diaryRepo";
-import { EntrySlot, MoodKey, EnergyLevel, makeEntryId } from "../core/types";
+import { useUserDoc } from "../query/useUserDoc";
+import { upsertSession, deleteSessionById } from "../firebase/diaryRepo";
+import { addTopicPreset } from "../firebase/userRepo";
+import {
+  EntrySlot,
+  MoodKey,
+  EnergyLevel,
+  makeEntryId,
+  ISODate,
+  EntryId,
+} from "../core/types";
 
 const MOODS: { key: MoodKey; label: string }[] = [
   { key: "very_bad", label: "완전↓" },
@@ -39,8 +49,8 @@ const ENERGIES: { key: EnergyLevel; label: string }[] = [
   { key: 5, label: "5" },
 ];
 
-// ✅ v1: 단일 선택 토픽 프리셋(원하면 늘려도 됨)
-const TOPIC_PRESETS = [
+// ✅ 기본 프리셋
+const BASE_TOPIC_PRESETS = [
   "일/업무",
   "공부/성장",
   "운동/건강",
@@ -53,17 +63,31 @@ const TOPIC_PRESETS = [
   "돈/소비",
   "취미/여가",
   "멘탈/불안",
-  "기타",
 ] as const;
+
+function ensureISODate(v: string): ISODate {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return v as ISODate;
+  return dayjs().format("YYYY-MM-DD") as ISODate;
+}
+
+function cleanTopics(input: string[]): string[] {
+  const cleaned = input
+    .map((t) => String(t ?? "").trim())
+    .filter(Boolean);
+  // 중복 제거(순서 유지)
+  return Array.from(new Set(cleaned));
+}
 
 export default function EntryScreen() {
   const { user } = useAuth();
   const qc = useQueryClient();
 
   const params = useLocalSearchParams();
+
   const date = useMemo(() => {
-    const p = typeof params.date === "string" ? params.date : dayjs().format("YYYY-MM-DD");
-    return p;
+    const p =
+      typeof params.date === "string" ? params.date : dayjs().format("YYYY-MM-DD");
+    return ensureISODate(p);
   }, [params.date]);
 
   const slot = useMemo(() => {
@@ -71,30 +95,94 @@ export default function EntryScreen() {
     return (p === "morning" ? "morning" : "evening") as EntrySlot;
   }, [params.slot]);
 
+  const entryId: EntryId = useMemo(() => makeEntryId(date, slot), [date, slot]);
+
   // ✅ 코치 CTA 파라미터(선택)
   const ctaId = typeof params.ctaId === "string" ? params.ctaId : "";
   const ctaTopic = typeof params.ctaTopic === "string" ? params.ctaTopic : "";
 
-  // ✅ 여기 프로젝트는 (uid, date, slot) 기반 훅을 쓰고 있음
-  const { data: existing, isLoading } = useEntrySession(user?.uid ?? null, date, slot);
+  // ✅ userDoc에서 유저 커스텀 토픽 프리셋 로드
+  const { data: userDoc } = useUserDoc(user?.uid ?? null);
+  const userPresets = useMemo(() => cleanTopics(userDoc?.topicPresets ?? []), [userDoc?.topicPresets]);
+
+  // ✅ 화면에 보여줄 프리셋 = 기본 + 유저 프리셋(중복 제거)
+  const TOPIC_PRESETS = useMemo(() => {
+    return Array.from(new Set([...BASE_TOPIC_PRESETS, ...userPresets]));
+  }, [userPresets]);
+
+  // ✅ EntryId 기준 훅
+  const { data: existing, isLoading } = useEntrySession(user?.uid ?? null, entryId);
 
   const [mood, setMood] = useState<MoodKey>("calm");
   const [energy, setEnergy] = useState<EnergyLevel>(3);
 
-  // ✅ 선택형 토픽
-  const [topicPreset, setTopicPreset] = useState<string>(""); // presets 중 하나
-  const [topicCustom, setTopicCustom] = useState<string>(""); // 기타 입력 시만
+  // ✅ 멀티 토픽
+  const [selectedTopics, setSelectedTopics] = useState<string[]>([]);
+  const [topicCustom, setTopicCustom] = useState<string>("");
+
   const [note, setNote] = useState<string>("");
 
   const [toastVisible, setToastVisible] = useState(false);
   const [err, setErr] = useState<string>("");
 
-  // ✅ 저장할 최종 topic 문자열
-  const finalTopic = useMemo(() => {
-    if (!topicPreset) return "";
-    if (topicPreset === "기타") return topicCustom.trim();
-    return topicPreset.trim();
-  }, [topicPreset, topicCustom]);
+  // (선택) 안전장치: 최대 선택 개수
+  const MAX_TOPICS = 5;
+
+  const toggleTopic = (t: string) => {
+    const topic = t.trim();
+    if (!topic) return;
+
+    setSelectedTopics((prev) => {
+      const exists = prev.includes(topic);
+      if (exists) return prev.filter((x) => x !== topic);
+
+      if (prev.length >= MAX_TOPICS) {
+        setErr(`토픽은 최대 ${MAX_TOPICS}개까지 선택 가능`);
+        return prev;
+      }
+      return [...prev, topic];
+    });
+  };
+
+  const addCustomTopic = async () => {
+    if (!user?.uid) return;
+
+    const t = topicCustom.trim();
+    if (!t) {
+      setErr("토픽을 입력해줘");
+      return;
+    }
+    if (t.length < 2) {
+      setErr("토픽은 2글자 이상으로 적어줘");
+      return;
+    }
+
+    // 선택 목록에 추가(중복 제거, 최대치 체크)
+    setSelectedTopics((prev) => {
+      if (prev.includes(t)) return prev;
+      if (prev.length >= MAX_TOPICS) {
+        setErr(`토픽은 최대 ${MAX_TOPICS}개까지 선택 가능`);
+        return prev;
+      }
+      return [...prev, t];
+    });
+
+    setTopicCustom("");
+
+    // ✅ 유저 프리셋으로 저장(기본 프리셋에 없는 것만)
+    const isBase = (BASE_TOPIC_PRESETS as readonly string[]).includes(t);
+    if (!isBase) {
+      try {
+        await addTopicPreset(user.uid, t);
+        // userDoc은 훅에서 자동으로 다시 가져올 수도 있고,
+        // 아니면 invalidate해서 재조회 유도
+        qc.invalidateQueries({ queryKey: ["userDoc", user.uid] });
+      } catch (e: any) {
+        // 저장 실패해도 기록 자체는 가능해야 하니, 치명 에러로 막지 않음
+        setErr(e?.message ?? "토픽 저장 실패");
+      }
+    }
+  };
 
   // 기존 데이터 로딩
   React.useEffect(() => {
@@ -103,36 +191,24 @@ export default function EntryScreen() {
     setMood(existing.mood);
     setEnergy(existing.energy);
 
-    const legacyTopic = (existing.topic ?? "").trim();
-    if (legacyTopic) {
-      // preset에 있으면 preset으로, 없으면 기타 + 커스텀으로
-      const isPreset = (TOPIC_PRESETS as readonly string[]).includes(legacyTopic);
-      if (isPreset) {
-        setTopicPreset(legacyTopic);
-        setTopicCustom("");
-      } else {
-        setTopicPreset("기타");
-        setTopicCustom(legacyTopic);
-      }
-    } else {
-      setTopicPreset("");
-      setTopicCustom("");
-    }
+    const topics =
+      Array.isArray(existing.topics) && existing.topics.length > 0
+        ? existing.topics
+        : existing.topic
+        ? [existing.topic]
+        : [];
 
+    setSelectedTopics(cleanTopics(topics));
     setNote(existing.note ?? "");
   }, [existing]);
 
   const onSave = async () => {
     if (!user?.uid) return;
 
-    if (!finalTopic) {
-      setErr("topic을 선택해줘");
-      return;
-    }
+    const topics = cleanTopics(selectedTopics);
 
-    // 기타인데 너무 짧거나 공백이면 막기
-    if (topicPreset === "기타" && finalTopic.length < 2) {
-      setErr("기타 토픽은 2글자 이상으로 적어줘");
+    if (topics.length === 0) {
+      setErr("topic을 1개 이상 선택해줘");
       return;
     }
 
@@ -143,25 +219,26 @@ export default function EntryScreen() {
         mood,
         energy,
 
-        // ✅ v2 호환 저장: topics[] + 레거시 topic 동시 저장
-        topics: [finalTopic],
-        topic: finalTopic,
+        // ✅ v2: 멀티 토픽
+        topics,
+
+        // ✅ v1 레거시 호환: 첫 번째 토픽만 저장
+        topic: topics[0] ?? "",
 
         note: note.trim(),
       });
 
-      // ✅ Home(todaySessions) 즉시 갱신
+      // ✅ 캐시 무효화
+      qc.invalidateQueries({ queryKey: ["entrySession", user.uid, entryId] });
       qc.invalidateQueries({ queryKey: ["todaySessions", user.uid, date] });
-
-      // ✅ Calendar(monthSessions) 즉시 갱신
       qc.invalidateQueries({ queryKey: ["monthSessions", user.uid] });
+      qc.invalidateQueries({ queryKey: ["reportSessions", user.uid] });
 
       setToastVisible(true);
 
-      const entryId = makeEntryId(date, slot);
       setTimeout(() => {
         router.replace({
-          pathname: "/(tabs)/entry-detail",
+          pathname: "/entry-detail",
           params: { entryId },
         });
       }, 250);
@@ -172,10 +249,15 @@ export default function EntryScreen() {
 
   const onDelete = async () => {
     if (!user?.uid) return;
+
     try {
-      await deleteSession(user.uid, date, slot);
+      await deleteSessionById(user.uid, entryId);
+
+      qc.invalidateQueries({ queryKey: ["entrySession", user.uid, entryId] });
       qc.invalidateQueries({ queryKey: ["todaySessions", user.uid, date] });
       qc.invalidateQueries({ queryKey: ["monthSessions", user.uid] });
+      qc.invalidateQueries({ queryKey: ["reportSessions", user.uid] });
+
       router.back();
     } catch (e: any) {
       setErr(e?.message ?? "삭제 실패");
@@ -183,14 +265,19 @@ export default function EntryScreen() {
   };
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+    >
       <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
         <Card>
           <Card.Content style={{ gap: 6 }}>
             <Text variant="titleMedium">
               {date} · {slot === "morning" ? "아침" : "저녁"}
             </Text>
-            <Text style={{ opacity: 0.7 }}>하루의 변화(Delta)를 위해 아침/저녁을 분리해서 기록한다.</Text>
+            <Text style={{ opacity: 0.7 }}>
+              하루의 변화(Delta)를 위해 아침/저녁을 분리해서 기록한다.
+            </Text>
           </Card.Content>
         </Card>
 
@@ -217,7 +304,11 @@ export default function EntryScreen() {
             <Text variant="titleMedium">Mood</Text>
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
               {MOODS.map((m) => (
-                <Chip key={m.key} selected={mood === m.key} onPress={() => setMood(m.key)}>
+                <Chip
+                  key={m.key}
+                  selected={mood === m.key}
+                  onPress={() => setMood(m.key)}
+                >
                   {m.label}
                 </Chip>
               ))}
@@ -234,30 +325,41 @@ export default function EntryScreen() {
 
             <Divider />
 
-            <Text variant="titleMedium">Topic (선택 1개)</Text>
+            <Text variant="titleMedium">
+              Topic (다중 선택 · 최대 {MAX_TOPICS}개)
+            </Text>
+
             <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
               {TOPIC_PRESETS.map((t) => (
                 <Chip
                   key={t}
-                  selected={topicPreset === t}
-                  onPress={() => {
-                    setTopicPreset(t);
-                    if (t !== "기타") setTopicCustom("");
-                  }}
+                  selected={selectedTopics.includes(t)}
+                  onPress={() => toggleTopic(t)}
                 >
                   {t}
                 </Chip>
               ))}
             </View>
 
-            {topicPreset === "기타" ? (
-              <TextInput
-                mode="outlined"
-                value={topicCustom}
-                onChangeText={setTopicCustom}
-                placeholder="기타 토픽을 입력 (예: 이직, 병원, 이사...)"
-              />
-            ) : null}
+            {/* ✅ 커스텀 토픽 추가 */}
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+              <View style={{ flex: 1 }}>
+                <TextInput
+                  mode="outlined"
+                  value={topicCustom}
+                  onChangeText={setTopicCustom}
+                  placeholder="새 토픽 추가 (예: 이직, 병원, 이사...)"
+                  onSubmitEditing={addCustomTopic}
+                  returnKeyType="done"
+                />
+              </View>
+              <IconButton icon="plus" onPress={addCustomTopic} />
+            </View>
+
+            {/* 선택된 토픽 미리보기 */}
+            <Text style={{ opacity: 0.7 }}>
+              선택됨: {selectedTopics.length > 0 ? selectedTopics.join(", ") : "—"}
+            </Text>
 
             <Divider />
 
@@ -273,7 +375,12 @@ export default function EntryScreen() {
         </Card>
 
         <View style={{ flexDirection: "row", gap: 8 }}>
-          <Button mode="contained" onPress={onSave} loading={isLoading} style={{ flex: 1 }}>
+          <Button
+            mode="contained"
+            onPress={onSave}
+            loading={isLoading}
+            style={{ flex: 1 }}
+          >
             저장
           </Button>
           {!!existing ? (

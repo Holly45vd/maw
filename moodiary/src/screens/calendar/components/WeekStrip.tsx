@@ -32,6 +32,12 @@ export default function WeekStrip({
 }) {
   const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
 
+  const dotChar = (hasSession: boolean, hit: boolean, focusing: boolean) => {
+    if (!hasSession) return "○";            // 기록 없음
+    if (!focusing) return "●";              // focusTopic 없으면: 기록 있음
+    return hit ? "●" : "◌";                 // focusTopic 있으면: hit 여부 구분
+  };
+
   return (
     <Card>
       <Card.Content style={{ gap: 10 }}>
@@ -48,12 +54,21 @@ export default function WeekStrip({
             const selected = date === selectedDate;
             const future = dayjs(date).isAfter(dayjs(), "day");
 
-            // focusTopic이면 해당 날짜가 토픽 히트인지 체크(없으면 흐리게)
-            let hit = true;
-            if (focusTopic) {
-              const ms = stat.morning ? getTopics(stat.morning as any) : [];
-              const es = stat.evening ? getTopics(stat.evening as any) : [];
-              hit = ms.includes(focusTopic) || es.includes(focusTopic);
+            const focusing = !!focusTopic;
+
+            const morningHas = !!stat.morning;
+            const eveningHas = !!stat.evening;
+
+            const morningTopics = stat.morning ? getTopics(stat.morning as any) : [];
+            const eveningTopics = stat.evening ? getTopics(stat.evening as any) : [];
+
+            const morningHit = focusing ? (morningHas && morningTopics.includes(focusTopic)) : morningHas;
+            const eveningHit = focusing ? (eveningHas && eveningTopics.includes(focusTopic)) : eveningHas;
+
+            // 날짜 단위 hit (타일 흐리기용)
+            let dayHit = true;
+            if (focusing) {
+              dayHit = morningHit || eveningHit;
             }
 
             return (
@@ -66,7 +81,7 @@ export default function WeekStrip({
                   marginHorizontal: 4,
                   borderRadius: 14,
                   alignItems: "center",
-                  opacity: future ? 0.35 : hit ? 1 : 0.45,
+                  opacity: future ? 0.35 : dayHit ? 1 : 0.45,
                   borderWidth: selected ? 1 : 0,
                   borderColor: selected ? "rgba(0,0,0,0.2)" : "transparent",
                 }}
@@ -76,9 +91,14 @@ export default function WeekStrip({
                   {d.date()}
                 </Text>
 
-                <View style={{ flexDirection: "row", gap: 6, marginTop: 6 }}>
-                  <Text style={{ fontSize: 11 }}>{stat.morning ? "●" : "○"}</Text>
-                  <Text style={{ fontSize: 11 }}>{stat.evening ? "●" : "○"}</Text>
+                {/* ✅ 좌: 아침 / 우: 저녁 (focusTopic이면 hit 여부로 ●/◌ 구분) */}
+                <View style={{ flexDirection: "row", gap: 8, marginTop: 6 }}>
+                  <Text style={{ fontSize: 12 }}>
+                    {dotChar(morningHas, morningHit, focusing)}
+                  </Text>
+                  <Text style={{ fontSize: 12 }}>
+                    {dotChar(eveningHas, eveningHit, focusing)}
+                  </Text>
                 </View>
               </Pressable>
             );
@@ -86,7 +106,10 @@ export default function WeekStrip({
         </View>
 
         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center" }}>
-          <Text style={{ opacity: 0.65 }}>좌: 아침 / 우: 저녁</Text>
+          <Text style={{ opacity: 0.65 }}>
+            좌: 아침 / 우: 저녁
+            {focusTopic ? "  ·  ●=토픽 포함 / ◌=기록은 있으나 미포함" : ""}
+          </Text>
           <Button mode="text" onPress={onOpenMonth}>
             월간 보기
           </Button>

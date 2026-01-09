@@ -1,4 +1,4 @@
-// src/screens/report/ReportScreen.tsx
+// /workspaces/maw/moodiary/src/screens/report/ReportScreen.tsx
 import React, { useMemo, useState } from "react";
 import { ScrollView, View } from "react-native";
 import dayjs from "dayjs";
@@ -34,7 +34,10 @@ function calcRange(mode: ReportMode) {
 
 function getTopicsFromSession(s: any): string[] {
   if (Array.isArray(s?.topics) && s.topics.length > 0) {
-    return s.topics.map(String).map((t: string) => t.trim()).filter(Boolean);
+    return s.topics
+      .map(String)
+      .map((t: string) => t.trim())
+      .filter(Boolean);
   }
   const legacy = typeof s?.topic === "string" ? s.topic.trim() : "";
   return legacy ? [legacy] : [];
@@ -73,6 +76,13 @@ export default function ReportScreen() {
 
   const goCalendar = (extra?: Record<string, any>) => {
     router.push({ pathname: "/(tabs)/calendar", params: { ...extra } });
+  };
+
+  // ✅ TopicCard에서 토픽 칩 누르면 캘린더 포커스 토픽으로 이동
+  const onPressTopic = (topic: string) => {
+    const t = (topic ?? "").trim();
+    if (!t) return;
+    goCalendar({ month: thisMonth, focusTopic: t });
   };
 
   // ---- CoachCTA navigation ----
@@ -190,7 +200,10 @@ export default function ReportScreen() {
           <KpiCard volume={stats.volume} energy={stats.energy} />
           <EnergyCard energy={stats.energy} />
           <MoodCard mood={stats.mood} />
-          <TopicCard topic={stats.topic} />
+
+          {/* ✅ 토픽 멀티 집계 표시 + 클릭 시 캘린더 focusTopic */}
+          <TopicCard topic={stats.topic} onPressTopic={onPressTopic} />
+
           <CoachCard coach={coach} onPressCta={onPressCoachCta} />
         </>
       )}

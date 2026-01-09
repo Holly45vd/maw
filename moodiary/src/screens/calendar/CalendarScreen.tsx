@@ -8,7 +8,7 @@ import { router, useLocalSearchParams } from "expo-router";
 
 import { useAuth } from "../../providers/AuthProvider";
 import { useMonthSessions } from "../../query/useMonthSessions";
-import { EntrySession, EntrySlot } from "../../core/types";
+import { EntrySession, EntrySlot, ISODate, makeEntryId } from "../../core/types";
 
 import WeekStrip from "./components/WeekStrip";
 import MonthPickerModal from "./components/MonthPickerModal";
@@ -16,8 +16,9 @@ import SlotCard from "./components/SlotCard";
 
 dayjs.extend(isSameOrBefore);
 
-function makeEntryId(date: string, slot: EntrySlot) {
-  return `${date}_${slot}`;
+function ensureISODate(v: string): ISODate {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return v as ISODate;
+  return dayjs().format("YYYY-MM-DD") as ISODate;
 }
 
 function getTopicsFromSession(s: any): string[] {
@@ -29,10 +30,12 @@ function getTopicsFromSession(s: any): string[] {
 }
 
 /** 선택 날짜 기준 주간(7일) */
-function buildWeekStrip(selectedDate: string) {
+function buildWeekStrip(selectedDate: ISODate) {
   const base = dayjs(selectedDate);
   const start = base.startOf("week"); // 일요일 시작
-  return new Array(7).fill(0).map((_, i) => start.add(i, "day").format("YYYY-MM-DD"));
+  return new Array(7)
+    .fill(0)
+    .map((_, i) => start.add(i, "day").format("YYYY-MM-DD") as ISODate);
 }
 
 export default function CalendarScreen() {
@@ -41,13 +44,16 @@ export default function CalendarScreen() {
   const params = useLocalSearchParams();
   const focusTopic = typeof params.focusTopic === "string" ? params.focusTopic : "";
 
-  const initialDate =
-    (typeof params.date === "string" && params.date) || dayjs().format("YYYY-MM-DD");
-  const initialMonth =
-    (typeof params.month === "string" && params.month) || dayjs(initialDate).format("YYYY-MM");
+  const initialDate = ensureISODate(
+    (typeof params.date === "string" && params.date) || dayjs().format("YYYY-MM-DD")
+  );
 
-  const [selectedDate, setSelectedDate] = useState(initialDate);
-  const [month, setMonth] = useState(initialMonth);
+  const initialMonth =
+    (typeof params.month === "string" && params.month) ||
+    dayjs(initialDate).format("YYYY-MM");
+
+  const [selectedDate, setSelectedDate] = useState<ISODate>(initialDate);
+  const [month, setMonth] = useState<string>(initialMonth);
   const [monthOpen, setMonthOpen] = useState(false);
 
   const { data, isLoading } = useMonthSessions(user?.uid ?? null, month);
@@ -73,27 +79,32 @@ export default function CalendarScreen() {
   }, [selectedDate]);
 
   const onSelectDate = (date: string) => {
-    setSelectedDate(date);
-    const m = dayjs(date).format("YYYY-MM");
+    const iso = ensureISODate(date);
+    setSelectedDate(iso);
+    const m = dayjs(iso).format("YYYY-MM");
     if (m !== month) setMonth(m);
   };
 
-  const onPrevWeek = () => onSelectDate(dayjs(selectedDate).subtract(7, "day").format("YYYY-MM-DD"));
-  const onNextWeek = () => onSelectDate(dayjs(selectedDate).add(7, "day").format("YYYY-MM-DD"));
+  const onPrevWeek = () =>
+    onSelectDate(dayjs(selectedDate).subtract(7, "day").format("YYYY-MM-DD"));
+  const onNextWeek = () =>
+    onSelectDate(dayjs(selectedDate).add(7, "day").format("YYYY-MM-DD"));
 
-  // ✅ 핵심: 라우트 경로를 (tabs)로 박지 말고, 라우트 파일명 기준으로 이동
+  // ✅ 라우트 파일명 기준 이동 + EntryId 표준(makeEntryId)
   const onPressSlot = (date: string, slot: EntrySlot, has: boolean) => {
     if (!user?.uid) return;
+
+    const iso = ensureISODate(date);
 
     if (has) {
       router.push({
         pathname: "/entry-detail",
-        params: { entryId: makeEntryId(date, slot) },
+        params: { entryId: makeEntryId(iso, slot) },
       });
     } else {
       router.push({
         pathname: "/entry",
-        params: { date, slot },
+        params: { date: iso, slot },
       });
     }
   };
