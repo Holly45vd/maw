@@ -1,0 +1,16 @@
+<!-- day.svg -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <!-- sun -->
+  <circle cx="64" cy="64" r="36" fill="#F6D34A"/>
+
+  <!-- short rays (soft, minimal) -->
+  <path d="M64 14 V26" stroke="#F6D34A" stroke-width="10" stroke-linecap="round"/>
+  <path d="M64 102 V114" stroke="#F6D34A" stroke-width="10" stroke-linecap="round"/>
+  <path d="M14 64 H26" stroke="#F6D34A" stroke-width="10" stroke-linecap="round"/>
+  <path d="M102 64 H114" stroke="#F6D34A" stroke-width="10" stroke-linecap="round"/>
+
+  <path d="M30 30 L38 38" stroke="#F6D34A" stroke-width="10" stroke-linecap="round"/>
+  <path d="M98 30 L90 38" stroke="#F6D34A" stroke-width="10" stroke-linecap="round"/>
+  <path d="M30 98 L38 90" stroke="#F6D34A" stroke-width="10" stroke-linecap="round"/>
+  <path d="M98 98 L90 90" stroke="#F6D34A" stroke-width="10" stroke-linecap="round"/>
+</svg>

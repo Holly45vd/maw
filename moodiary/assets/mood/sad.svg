@@ -1,0 +1,13 @@
+<!-- 07_sad.svg (light blue, droopy blob + worried eyes + down mouth) -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <path d="M26 46
+           C30 24 54 12 70 16
+           C92 22 110 44 106 70
+           C102 96 80 114 56 110
+           C34 106 18 80 26 46 Z" fill="#B9D7F2"/>
+  <!-- eyes (worried arcs) -->
+  <path d="M40 58 Q50 50 58 58" fill="none" stroke="#1F1F1F" stroke-width="10" stroke-linecap="round"/>
+  <path d="M70 58 Q78 50 88 58" fill="none" stroke="#1F1F1F" stroke-width="10" stroke-linecap="round"/>
+  <!-- mouth (down) -->
+  <path d="M48 90 Q64 76 80 90" fill="none" stroke="#1F1F1F" stroke-width="10" stroke-linecap="round"/>
+</svg>

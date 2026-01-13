@@ -1,0 +1,17 @@
+<!-- 06_anxious.svg (beige, slightly wobbly blob + shaky mouth) -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <path d="M20 54
+           C20 30 44 14 64 16
+           C86 18 110 30 108 58
+           C106 86 86 112 60 110
+           C34 108 18 86 20 54 Z" fill="#F4D3A0"/>
+  <!-- eyes (tight) -->
+  <path d="M38 54 L52 62" stroke="#1F1F1F" stroke-width="10" stroke-linecap="round"/>
+  <path d="M52 54 L38 62" stroke="#1F1F1F" stroke-width="10" stroke-linecap="round"/>
+  <path d="M76 54 L90 62" stroke="#1F1F1F" stroke-width="10" stroke-linecap="round"/>
+  <path d="M90 54 L76 62" stroke="#1F1F1F" stroke-width="10" stroke-linecap="round"/>
+  <!-- mouth (wavy) -->
+  <path d="M46 86
+           C52 80 58 92 64 86
+           C70 80 76 92 82 86" fill="none" stroke="#1F1F1F" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

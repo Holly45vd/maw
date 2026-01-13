@@ -1,0 +1,18 @@
+<!-- 08_very_bad.svg (mint, soft polygon + tired sad face) -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <path d="M64 12
+           L92 20
+           L112 44
+           L116 74
+           L100 102
+           L72 116
+           L40 112
+           L18 90
+           L14 58
+           L28 30 Z" fill="#86E1C8"/>
+  <!-- eyes (tired) -->
+  <path d="M40 60 Q50 52 58 60" fill="none" stroke="#1F1F1F" stroke-width="10" stroke-linecap="round"/>
+  <path d="M70 60 Q78 52 88 60" fill="none" stroke="#1F1F1F" stroke-width="10" stroke-linecap="round"/>
+  <!-- mouth (down) -->
+  <path d="M50 94 Q64 82 78 94" fill="none" stroke="#1F1F1F" stroke-width="10" stroke-linecap="round"/>
+</svg>

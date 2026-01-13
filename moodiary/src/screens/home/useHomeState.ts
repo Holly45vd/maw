@@ -45,10 +45,11 @@ export function useHomeState() {
   const [selectedDate, setSelectedDate] = useState<string>(todayId);
   const [energyMode, setEnergyMode] = useState<"morning" | "evening">("evening");
 
+  // ✅ ㅏ 오타 수정 + 오늘 포함 5일(오늘-4 ~ 오늘)
   const week = useMemo<DayItem[]>(() => {
     const end = dayjs(todayId);
     const start = end.subtract(4, "day");
-    return Array.from({ length: ㅏ }).map((_, i) => {
+    return Array.from({ length: 5 }).map((_, i) => {
       const d = start.add(i, "day");
       return {
         date: d.format("YYYY-MM-DD"),

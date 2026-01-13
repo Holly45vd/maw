@@ -25,6 +25,9 @@ import { auth } from "../firebase/firebase";
 import { useUserDoc } from "../query/useUserDoc";
 import { updateUserProfile, updateUserSettings } from "../firebase/userRepo";
 
+import { validatePassword } from "../core/authPolicy";
+import { authErrorText } from "../core/authErrorText";
+
 type DefaultTab = "home" | "calendar" | "report" | "profile";
 type ToastState = { visible: boolean; msg: string };
 
@@ -121,8 +124,8 @@ export default function ProfileScreen() {
       qc.invalidateQueries({ queryKey: ["userDoc", user.uid] });
       showToast("닉네임 저장 완료");
       setIsEditingName(false);
-    } catch (e: any) {
-      showToast(e?.message ?? "닉네임 저장 실패");
+    } catch (e: unknown) {
+      showToast(authErrorText(e, { defaultMessage: "닉네임 저장 실패" }));
     } finally {
       setSavingName(false);
     }
@@ -150,9 +153,9 @@ export default function ProfileScreen() {
       await updateUserSettings(user.uid, { [key]: next } as any);
       qc.invalidateQueries({ queryKey: ["userDoc", user.uid] });
       showToast(successMsg);
-    } catch (e: any) {
+    } catch (e: unknown) {
       rollback();
-      showToast(e?.message ?? "설정 저장 실패");
+      showToast(authErrorText(e, { defaultMessage: "설정 저장 실패" }));
     } finally {
       setSaving(false);
     }
@@ -211,8 +214,9 @@ export default function ProfileScreen() {
       return;
     }
 
-    if (newPw.length < 8) {
-      showToast("새 비밀번호는 8자 이상");
+    const pwErr = validatePassword(newPw);
+    if (pwErr) {
+      showToast(pwErr);
       return;
     }
 
@@ -228,7 +232,7 @@ export default function ProfileScreen() {
 
     setSavingPw(true);
     try {
-      // ✅ 재인증(필수): 이메일 인증메일 같은 건 안 보내고, 현재 비번으로 바로 검증
+      // ✅ 재인증(필수)
       const cred = EmailAuthProvider.credential(email, currentPw);
       await reauthenticateWithCredential(auth.currentUser, cred);
 
@@ -242,10 +246,8 @@ export default function ProfileScreen() {
       setPwOpen(false);
 
       showToast("비밀번호 변경 완료");
-    } catch (e: any) {
-      // 흔한 에러:
-      // auth/wrong-password, auth/too-many-requests, auth/requires-recent-login
-      showToast(e?.message ?? "비밀번호 변경 실패");
+    } catch (e: unknown) {
+      showToast(authErrorText(e, { defaultMessage: "비밀번호 변경 실패" }));
     } finally {
       setSavingPw(false);
     }
@@ -254,8 +256,8 @@ export default function ProfileScreen() {
   const onLogout = async () => {
     try {
       await auth.signOut();
-    } catch (e: any) {
-      showToast(e?.message ?? "로그아웃 실패");
+    } catch (e: unknown) {
+      showToast(authErrorText(e, { defaultMessage: "로그아웃 실패" }));
     }
   };
 

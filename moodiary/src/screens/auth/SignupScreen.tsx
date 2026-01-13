@@ -2,8 +2,11 @@ import React, { useState } from "react";
 import { View } from "react-native";
 import { Button, Card, Text, TextInput } from "react-native-paper";
 import { createUserWithEmailAndPassword } from "firebase/auth";
-import { auth } from "../../firebase/firebase";
 import { router } from "expo-router";
+
+import { auth } from "../../firebase/firebase";
+import { validatePassword } from "../../core/authPolicy";
+import { authErrorText } from "../../core/authErrorText";
 
 export default function SignupScreen() {
   const [email, setEmail] = useState("");
@@ -15,15 +18,17 @@ export default function SignupScreen() {
   const onSignup = async () => {
     setErr(null);
 
-    if (pw.length < 6) return setErr("비밀번호는 6자 이상");
+    const pwErr = validatePassword(pw);
+    if (pwErr) return setErr(pwErr);
+
     if (pw !== pw2) return setErr("비밀번호가 일치하지 않음");
 
     setLoading(true);
     try {
       await createUserWithEmailAndPassword(auth, email.trim(), pw);
       router.replace("/(tabs)");
-    } catch (e: any) {
-      setErr(e?.message ?? "회원가입 실패");
+    } catch (e: unknown) {
+      setErr(authErrorText(e, { defaultMessage: "회원가입 실패" }));
     } finally {
       setLoading(false);
     }

@@ -1,0 +1,9 @@
+<!-- 01_very_good.svg (pink, round-oval + big smile) -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <!-- shape -->
+  <ellipse cx="64" cy="64" rx="56" ry="52" fill="#F7A9B6"/>
+  <!-- face -->
+  <ellipse cx="48" cy="54" rx="6" ry="10" fill="#1F1F1F"/>
+  <ellipse cx="80" cy="54" rx="6" ry="10" fill="#1F1F1F"/>
+  <path d="M40 78 Q64 100 88 78" fill="none" stroke="#1F1F1F" stroke-width="10" stroke-linecap="round"/>
+</svg>

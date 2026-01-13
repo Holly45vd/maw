@@ -1,0 +1,13 @@
+<!-- 04_calm.svg (light green, rounded blob + surprised O mouth) -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <path d="M64 10
+           C92 10 114 30 114 58
+           C114 90 90 114 60 114
+           C30 114 12 92 12 64
+           C12 34 34 10 64 10 Z" fill="#C7E89A"/>
+  <!-- eyes -->
+  <ellipse cx="50" cy="54" rx="6" ry="10" fill="#1F1F1F"/>
+  <ellipse cx="78" cy="54" rx="6" ry="10" fill="#1F1F1F"/>
+  <!-- mouth -->
+  <circle cx="64" cy="82" r="12" fill="none" stroke="#1F1F1F" stroke-width="10"/>
+</svg>

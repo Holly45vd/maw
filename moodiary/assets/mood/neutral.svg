@@ -1,0 +1,9 @@
+<!-- 05_neutral.svg (gray, squashed oval + flat mouth) -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <ellipse cx="64" cy="66" rx="56" ry="50" fill="#D7D7D7"/>
+  <!-- eyes -->
+  <path d="M38 56 H58" stroke="#1F1F1F" stroke-width="10" stroke-linecap="round"/>
+  <path d="M70 56 H90" stroke="#1F1F1F" stroke-width="10" stroke-linecap="round"/>
+  <!-- mouth -->
+  <path d="M52 82 H76" stroke="#1F1F1F" stroke-width="10" stroke-linecap="round"/>
+</svg>

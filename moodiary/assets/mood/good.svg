@@ -1,0 +1,11 @@
+<!-- 02_good.svg (peach, round + excited closed eyes + open mouth) -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <circle cx="64" cy="64" r="54" fill="#F6B08E"/>
+  <!-- eyes -->
+  <path d="M38 54 L52 62" stroke="#1F1F1F" stroke-width="10" stroke-linecap="round"/>
+  <path d="M52 54 L38 62" stroke="#1F1F1F" stroke-width="10" stroke-linecap="round"/>
+  <path d="M76 54 L90 62" stroke="#1F1F1F" stroke-width="10" stroke-linecap="round"/>
+  <path d="M90 54 L76 62" stroke="#1F1F1F" stroke-width="10" stroke-linecap="round"/>
+  <!-- mouth -->
+  <path d="M52 78 Q64 96 76 78 Q64 106 52 78 Z" fill="#1F1F1F"/>
+</svg>

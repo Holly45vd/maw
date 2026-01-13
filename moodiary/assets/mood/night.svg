@@ -1,0 +1,31 @@
+<!-- night_scene.svg -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <!-- moon (big, soft crescent) -->
+  <circle cx="64" cy="64" r="44" fill="#F2C94C"/>
+  <circle cx="82" cy="54" r="44" fill="#FFFFFF"/>
+
+  <!-- cloud (front, moved down) -->
+  <path d="M22 88
+           C22 76 32 68 44 68
+           C48 60 56 56 64 56
+           C78 56 88 66 90 78
+           C102 78 110 84 110 94
+           C110 106 102 112 90 112
+           H42
+           C30 112 22 104 22 88 Z"
+        fill="#EEF3F8"/>
+
+  <!-- star 1 -->
+  <path d="M92 30
+           L96 38
+           L104 42
+           L96 46
+           L92 54
+           L88 46
+           L80 42
+           L88 38 Z"
+        fill="#F2C94C"/>
+
+  <!-- star 2 (tiny) -->
+  <circle cx="38" cy="34" r="3" fill="#F2C94C"/>
+</svg>

@@ -1,6 +1,7 @@
 import React from "react";
 import { View } from "react-native";
-import { IconButton, Searchbar, Text } from "react-native-paper";
+import { IconButton, Text } from "react-native-paper";
+import { orbit } from "../../../ui/theme";
 
 type Props = {
   nickname: string;
@@ -13,10 +14,11 @@ export default function HeaderSection({
   onPressProfile,
   onPressBell,
 }: Props) {
-  const initial = (nickname?.trim() || "나").slice(0, 1).toUpperCase();
+  const name = (nickname ?? "나").trim() || "나";
+  const initial = name.slice(0, 1).toUpperCase();
 
   return (
-    <View style={{ gap: 12 }}>
+    <View style={{ gap: orbit.spacing.gapSm }}>
       <View
         style={{
           flexDirection: "row",
@@ -24,41 +26,52 @@ export default function HeaderSection({
           justifyContent: "space-between",
         }}
       >
-        <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
+        {/* Left: Avatar + Greeting */}
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
           <View
             style={{
-              width: 44,
-              height: 44,
-              borderRadius: 22,
-              backgroundColor: "rgba(30,136,229,0.15)",
+              width: 56,
+              height: 56,
+              borderRadius: 28,
+              backgroundColor: orbit.colors.mutedPill,
               alignItems: "center",
               justifyContent: "center",
+              borderWidth: 1,
+              borderColor: orbit.colors.line,
             }}
           >
-            <Text style={{ fontWeight: "800", color: "#1E88E5" }}>
+            <Text style={{ fontWeight: "900", color: orbit.colors.primary }}>
               {initial}
             </Text>
           </View>
 
           <View style={{ gap: 2 }}>
-            <Text style={{ opacity: 0.7 }}>Good day 👋</Text>
-            <Text variant="titleLarge" style={{ fontWeight: "900" }}>
-              {nickname}
+            <Text style={{ color: orbit.colors.subtext, fontWeight: "800" }}>
+              GOOD MORNING
+            </Text>
+            <Text style={{ ...orbit.typography.hero, color: orbit.colors.text }}>
+              {name}
             </Text>
           </View>
         </View>
 
-        <View style={{ flexDirection: "row", gap: 6 }}>
+        {/* Right: actions */}
+        <View style={{ flexDirection: "row", gap: 2 }}>
+          <IconButton
+            icon="bell-outline"
+            onPress={onPressBell ?? (() => {})}
+          />
           <IconButton icon="cog-outline" onPress={onPressProfile} />
-          <IconButton icon="bell-outline" onPress={onPressBell ?? (() => {})} />
         </View>
       </View>
 
-      <Searchbar
-        placeholder="Search..."
-        value={""}
-        onChangeText={() => {}}
-        style={{ borderRadius: 16 }}
+      {/* subtle divider */}
+      <View
+        style={{
+          height: 1,
+          backgroundColor: orbit.colors.line,
+          opacity: 0.9,
+        }}
       />
     </View>
   );
