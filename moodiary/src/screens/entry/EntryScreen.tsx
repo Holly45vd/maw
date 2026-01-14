@@ -3,7 +3,16 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { KeyboardAvoidingView, Platform, ScrollView, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import dayjs from "dayjs";
-import { Button, Snackbar, useTheme } from "react-native-paper";
+import {
+  Button,
+  Dialog,
+  Menu,
+  Portal,
+  Snackbar,
+  Text,
+  useTheme,
+} from "react-native-paper";
+import DateTimePicker from "@react-native-community/datetimepicker";
 import { useQueryClient } from "@tanstack/react-query";
 
 import { useAuth } from "../../providers/AuthProvider";
@@ -36,18 +45,18 @@ function cleanTopics(input: unknown): string[] {
 }
 
 const BASE_TOPIC_PRESETS = [
-  "일/업무",
-  "공부/성장",
-  "운동/건강",
-  "식사/체중",
-  "수면",
-  "가족",
-  "연인/소개팅",
-  "친구",
-  "인간관계",
-  "돈/소비",
-  "취미/여가",
-  "멘탈/불안",
+  "Work",
+  "Study",
+  "Workout",
+  "Meal / Weight",
+  "Sleep",
+  "Family",
+  "Dating / Relationship",
+  "Friends",
+  "People",
+  "Money",
+  "Hobby",
+  "Mental / Anxiety",
 ] as const;
 
 export default function EntryScreen() {
@@ -55,12 +64,12 @@ export default function EntryScreen() {
   const qc = useQueryClient();
   const params = useLocalSearchParams();
   const { colors } = useTheme();
-
   const bg = colors.background;
 
   // ---- route params ----
   const date = useMemo(() => {
-    const raw = typeof params.date === "string" ? params.date : dayjs().format("YYYY-MM-DD");
+    const raw =
+      typeof params.date === "string" ? params.date : dayjs().format("YYYY-MM-DD");
     return ensureISODate(raw);
   }, [params.date]);
 
@@ -71,10 +80,82 @@ export default function EntryScreen() {
 
   const entryId = useMemo<EntryId>(() => makeEntryId(date, slot), [date, slot]);
 
-  // ---- user doc (토픽 프리셋 확장) ----
-  const { data: userDoc } = useUserDoc(user?.uid ?? null);
-  const userPresets = useMemo(() => cleanTopics((userDoc as any)?.topicPresets ?? []), [(userDoc as any)?.topicPresets]);
+  // ---- date picker dialog ----
+  const [dateDialogOpen, setDateDialogOpen] = useState(false);
 
+  // mobile(DateTimePicker) draft
+  const [dateDraftObj, setDateDraftObj] = useState<Date>(() => dayjs(date).toDate());
+
+  // web(Year/Month/Day menus) draft
+  const [yMenu, setYMenu] = useState(false);
+  const [mMenu, setMMenu] = useState(false);
+  const [dMenu, setDMenu] = useState(false);
+
+  const [pickedYear, setPickedYear] = useState<number>(() => dayjs(date).year());
+  const [pickedMonth, setPickedMonth] = useState<number>(() => dayjs(date).month() + 1); // 1~12
+  const [pickedDay, setPickedDay] = useState<number>(() => dayjs(date).date());
+
+  useEffect(() => {
+    // route date 바뀌면 draft를 동기화
+    const cur = dayjs(date);
+    setDateDraftObj(cur.toDate());
+    setPickedYear(cur.year());
+    setPickedMonth(cur.month() + 1);
+    setPickedDay(cur.date());
+  }, [date]);
+
+  const openDateDialog = () => {
+    const cur = dayjs(date);
+    setDateDraftObj(cur.toDate());
+    setPickedYear(cur.year());
+    setPickedMonth(cur.month() + 1);
+    setPickedDay(cur.date());
+    setDateDialogOpen(true);
+  };
+
+  const closeDateDialog = () => {
+    setDateDialogOpen(false);
+    setYMenu(false);
+    setMMenu(false);
+    setDMenu(false);
+  };
+
+  const applyNextDate = (nextISO: ISODate) => {
+    closeDateDialog();
+    if (nextISO === date) return;
+    router.replace({ pathname: "/(tabs)/entry", params: { date: nextISO, slot } });
+  };
+
+  const applyDateDraft = () => {
+    // mobile용
+    const next = dayjs(dateDraftObj).format("YYYY-MM-DD") as ISODate;
+    applyNextDate(next);
+  };
+
+  const applyWebDraft = () => {
+    // web용 (Y/M/D)
+    const mm = String(pickedMonth).padStart(2, "0");
+    const dd = String(pickedDay).padStart(2, "0");
+    const next = `${pickedYear}-${mm}-${dd}` as ISODate;
+    applyNextDate(next);
+  };
+
+  const webDaysInMonth = useMemo(() => {
+    const mm = String(pickedMonth).padStart(2, "0");
+    return dayjs(`${pickedYear}-${mm}-01`).daysInMonth();
+  }, [pickedYear, pickedMonth]);
+
+  useEffect(() => {
+    // 월 바뀌어서 일수가 줄어든 경우 day 보정
+    if (pickedDay > webDaysInMonth) setPickedDay(webDaysInMonth);
+  }, [webDaysInMonth, pickedDay]);
+
+  // ---- user doc (topic presets) ----
+  const { data: userDoc } = useUserDoc(user?.uid ?? null);
+  const userPresets = useMemo(
+    () => cleanTopics((userDoc as any)?.topicPresets ?? []),
+    [(userDoc as any)?.topicPresets]
+  );
   const TOPIC_PRESETS = useMemo(() => {
     return Array.from(new Set([...BASE_TOPIC_PRESETS, ...userPresets]));
   }, [userPresets]);
@@ -101,14 +182,13 @@ export default function EntryScreen() {
   const showError = (msg: string) => setErr(msg);
 
   // ---- header computed ----
-  const weekdayKo = useMemo(() => {
-    const w = ["일", "월", "화", "수", "목", "금", "토"];
+  const weekday = useMemo(() => {
+    const w = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
     return w[dayjs(date).day()];
   }, [date]);
 
   const SlotIcon = slot === "morning" ? DayIcon : NightIcon;
-  const slotLabel = slot === "morning" ? "오전" : "오후";
-  const dateText = `${date} (${weekdayKo})`;
+  const dateText = `${date} (${weekday})`;
 
   // ---- topic handlers ----
   const toggleTopic = (t: string) => {
@@ -118,7 +198,7 @@ export default function EntryScreen() {
     f.setSelectedTopics((prev) => {
       if (prev.includes(topic)) return prev.filter((x) => x !== topic);
       if (prev.length >= f.MAX_TOPICS) {
-        showError(`토픽은 최대 ${f.MAX_TOPICS}개까지 선택 가능`);
+        showError(`You can select up to ${f.MAX_TOPICS} topics`);
         return prev;
       }
       return [...prev, topic];
@@ -129,14 +209,14 @@ export default function EntryScreen() {
     if (!user?.uid) return;
 
     const t = f.topicCustom.trim();
-    if (!t) return showError("토픽을 입력해줘");
-    if (t.length < 2) return showError("토픽은 2글자 이상으로 적어줘");
-    if (t.length > 20) return showError("토픽은 20글자 이내로 적어줘");
+    if (!t) return showError("Type a topic");
+    if (t.length < 2) return showError("Topic must be at least 2 characters");
+    if (t.length > 20) return showError("Topic must be within 20 characters");
 
     f.setSelectedTopics((prev) => {
       if (prev.includes(t)) return prev;
       if (prev.length >= f.MAX_TOPICS) {
-        showError(`토픽은 최대 ${f.MAX_TOPICS}개까지 선택 가능`);
+        showError(`You can select up to ${f.MAX_TOPICS} topics`);
         return prev;
       }
       return [...prev, t];
@@ -150,14 +230,14 @@ export default function EntryScreen() {
         await addTopicPreset(user.uid, t);
         qc.invalidateQueries({ queryKey: ["userDoc", user.uid] });
       } catch (e: any) {
-        showError(e?.message ?? "토픽 저장 실패");
+        showError(e?.message ?? "Failed to save topic preset");
       }
     }
   };
 
   // ---- save/delete ----
   const onSave = async () => {
-    if (!user?.uid) return showError("로그인이 필요해");
+    if (!user?.uid) return showError("Login required");
 
     const msg = f.validate();
     if (msg) return showError(msg);
@@ -186,7 +266,7 @@ export default function EntryScreen() {
         router.replace({ pathname: "/entry-detail", params: { entryId } });
       }, 250);
     } catch (e: any) {
-      showError(e?.message ?? "저장 실패");
+      showError(e?.message ?? "Save failed");
     } finally {
       setSaving(false);
     }
@@ -206,11 +286,23 @@ export default function EntryScreen() {
 
       router.back();
     } catch (e: any) {
-      showError(e?.message ?? "삭제 실패");
+      showError(e?.message ?? "Delete failed");
     } finally {
       setSaving(false);
     }
   };
+
+  const onChangeSlot = (next: EntrySlot) => {
+    if (next === slot) return;
+    router.replace({ pathname: "/(tabs)/entry", params: { date, slot: next } });
+  };
+
+  // year options for web menu
+  const yearOptions = useMemo(() => {
+    const nowY = dayjs().year();
+    // 현재년 기준 -5 ~ +3 (원하면 늘려)
+    return Array.from({ length: 9 }, (_, i) => nowY - 5 + i);
+  }, []);
 
   return (
     <KeyboardAvoidingView
@@ -224,10 +316,14 @@ export default function EntryScreen() {
       >
         <EntryStickyHeader
           dateText={dateText}
-          slotLabel={slotLabel}
+          slot={slot}
           SlotIcon={SlotIcon}
+          MorningIcon={DayIcon}
+          EveningIcon={NightIcon}
           saving={saving}
           onSave={onSave}
+          onChangeSlot={onChangeSlot}
+          onPressDate={openDateDialog}
         />
 
         <MoodSection mood={f.mood} onChange={f.setMood} />
@@ -260,18 +356,121 @@ export default function EntryScreen() {
               loading={saving && !toastVisible}
               style={{ borderRadius: 10 }}
             >
-              삭제
+              Delete
             </Button>
           </View>
         ) : null}
 
         <Snackbar visible={toastVisible} onDismiss={() => setToastVisible(false)}>
-          저장 완료
+          Saved
         </Snackbar>
 
         <Snackbar visible={!!err} onDismiss={() => setErr("")}>
           {err}
         </Snackbar>
+
+        {/* ✅ Date Picker Dialog (WEB fallback included) */}
+        <Portal>
+          <Dialog visible={dateDialogOpen} onDismiss={closeDateDialog}>
+            <Dialog.Title>Select date</Dialog.Title>
+
+            <Dialog.Content>
+              {Platform.OS === "web" ? (
+                <View style={{ gap: 12, paddingTop: 6 }}>
+                  <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
+                    {/* Year */}
+                    <Menu
+                      visible={yMenu}
+                      onDismiss={() => setYMenu(false)}
+                      anchor={
+                        <Button mode="outlined" onPress={() => setYMenu(true)}>
+                          {pickedYear}
+                        </Button>
+                      }
+                    >
+                      {yearOptions.map((y) => (
+                        <Menu.Item
+                          key={y}
+                          onPress={() => {
+                            setPickedYear(y);
+                            setYMenu(false);
+                          }}
+                          title={`${y}`}
+                        />
+                      ))}
+                    </Menu>
+
+                    {/* Month */}
+                    <Menu
+                      visible={mMenu}
+                      onDismiss={() => setMMenu(false)}
+                      anchor={
+                        <Button mode="outlined" onPress={() => setMMenu(true)}>
+                          {pickedMonth}
+                        </Button>
+                      }
+                    >
+                      {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
+                        <Menu.Item
+                          key={m}
+                          onPress={() => {
+                            setPickedMonth(m);
+                            setMMenu(false);
+                          }}
+                          title={`${m}`}
+                        />
+                      ))}
+                    </Menu>
+
+                    {/* Day */}
+                    <Menu
+                      visible={dMenu}
+                      onDismiss={() => setDMenu(false)}
+                      anchor={
+                        <Button mode="outlined" onPress={() => setDMenu(true)}>
+                          {pickedDay}
+                        </Button>
+                      }
+                    >
+                      {Array.from({ length: webDaysInMonth }, (_, i) => i + 1).map((d) => (
+                        <Menu.Item
+                          key={d}
+                          onPress={() => {
+                            setPickedDay(d);
+                            setDMenu(false);
+                          }}
+                          title={`${d}`}
+                        />
+                      ))}
+                    </Menu>
+                  </View>
+
+                  <Text style={{ opacity: 0.7 }}>
+                    {`${pickedYear}-${String(pickedMonth).padStart(2, "0")}-${String(pickedDay).padStart(2, "0")}`}
+                  </Text>
+                </View>
+              ) : (
+                <View style={{ paddingTop: 6 }}>
+                  <DateTimePicker
+                    value={dateDraftObj}
+                    mode="date"
+                    display={Platform.OS === "ios" ? "spinner" : "spinner"}
+                    onChange={(_, selected) => {
+                      if (selected) setDateDraftObj(selected);
+                    }}
+                  />
+                </View>
+              )}
+            </Dialog.Content>
+
+            <Dialog.Actions>
+              <Button onPress={closeDateDialog}>Cancel</Button>
+              <Button onPress={Platform.OS === "web" ? applyWebDraft : applyDateDraft}>
+                Apply
+              </Button>
+            </Dialog.Actions>
+          </Dialog>
+        </Portal>
       </ScrollView>
     </KeyboardAvoidingView>
   );

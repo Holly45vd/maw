@@ -1,72 +1,90 @@
 // src/screens/entry/hooks/useEntryForm.ts
 import { useEffect, useMemo, useState } from "react";
-import type { EnergyLevel, MoodKey } from "../../../core/types";
+import type { MoodKey, EnergyLevel } from "../../../core/types";
 
-function cleanTopics(input: unknown): string[] {
-  if (!Array.isArray(input)) return [];
-  const cleaned = input.map((t) => String(t ?? "").trim()).filter(Boolean);
-  return Array.from(new Set(cleaned));
-}
+type EntryLike =
+  | {
+      mood?: MoodKey;
+      energy?: EnergyLevel;
+      topics?: string[];
+      note?: string;
+    }
+  | null
+  | undefined;
 
-export function useEntryForm(existing: any | undefined) {
+const DEFAULT_MOOD: MoodKey = "neutral";
+const DEFAULT_ENERGY: EnergyLevel = 3;
+
+export function useEntryForm(existing: EntryLike) {
+  // limits
+  const NOTE_MAX = 500;
   const MAX_TOPICS = 5;
-  const NOTE_MAX = 300;
 
-  const [mood, setMood] = useState<MoodKey>("calm");
-  const [energy, setEnergy] = useState<EnergyLevel>(3);
+  // form states
+  const [mood, setMood] = useState<MoodKey>(DEFAULT_MOOD);
+  const [energy, setEnergy] = useState<EnergyLevel>(DEFAULT_ENERGY);
   const [selectedTopics, setSelectedTopics] = useState<string[]>([]);
   const [topicCustom, setTopicCustom] = useState("");
   const [note, setNote] = useState("");
 
+  // ✅ existing 변경 시 폼을 재주입/리셋
   useEffect(() => {
-    if (!existing) return;
+    if (existing) {
+      setMood((existing.mood ?? DEFAULT_MOOD) as MoodKey);
+      setEnergy((existing.energy ?? DEFAULT_ENERGY) as EnergyLevel);
+      setSelectedTopics(Array.isArray(existing.topics) ? existing.topics : []);
+      setNote(typeof existing.note === "string" ? existing.note : "");
+      setTopicCustom("");
+    } else {
+      // no saved data => reset defaults
+      setMood(DEFAULT_MOOD);
+      setEnergy(DEFAULT_ENERGY);
+      setSelectedTopics([]);
+      setNote("");
+      setTopicCustom("");
+    }
+  }, [
+    // dependency를 “내용 기반”으로 잡아야 확실히 바뀜
+    existing ? JSON.stringify(existing) : "EMPTY",
+  ]);
 
-    setMood(existing.mood);
-    setEnergy(existing.energy);
-
-    const topics =
-      Array.isArray(existing.topics) && existing.topics.length > 0
-        ? existing.topics
-        : typeof existing.topic === "string" && existing.topic.trim()
-        ? [existing.topic]
-        : [];
-
-    setSelectedTopics(cleanTopics(topics));
-    setNote(String(existing.note ?? ""));
-  }, [existing]);
-
-  const topicsCleaned = useMemo(() => cleanTopics(selectedTopics), [selectedTopics]);
   const trimmedNote = useMemo(() => note.trim(), [note]);
 
+  const topicsCleaned = useMemo(() => {
+    return selectedTopics.map((t) => t.trim()).filter(Boolean);
+  }, [selectedTopics]);
+
   const validate = () => {
-    if (topicsCleaned.length < 1) return "토픽을 1개 이상 선택해줘";
-    if (topicsCleaned.length > MAX_TOPICS) return `토픽은 최대 ${MAX_TOPICS}개까지 가능`;
-    if (trimmedNote.length > NOTE_MAX) return `메모는 ${NOTE_MAX}자 이내로 적어줘`;
+    if (!mood) return "Select a mood";
+    if (!energy) return "Select an energy level";
+    if (topicsCleaned.length > MAX_TOPICS) return `Select up to ${MAX_TOPICS} topics`;
+    if (trimmedNote.length > NOTE_MAX) return `Note is too long (max ${NOTE_MAX})`;
     return "";
   };
 
   return {
     // constants
-    MAX_TOPICS,
     NOTE_MAX,
+    MAX_TOPICS,
 
     // state
     mood,
-    setMood,
     energy,
-    setEnergy,
     selectedTopics,
-    setSelectedTopics,
     topicCustom,
-    setTopicCustom,
     note,
-    setNote,
 
     // derived
-    topicsCleaned,
     trimmedNote,
+    topicsCleaned,
 
-    // validation
+    // setters
+    setMood,
+    setEnergy,
+    setSelectedTopics,
+    setTopicCustom,
+    setNote,
+
     validate,
   };
 }

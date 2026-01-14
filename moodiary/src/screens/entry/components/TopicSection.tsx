@@ -81,9 +81,7 @@ export default function TopicSection({
           <IconButton icon="plus" onPress={onAddCustomTopic} iconColor={primary} />
         </View>
 
-        <Text style={{ color: muted }}>
-          선택됨: {topicsCleaned.length > 0 ? topicsCleaned.join(", ") : "—"}
-        </Text>
+
       </Card.Content>
     </Card>
   );

@@ -20,7 +20,7 @@ export default function MoodSection({
   const muted = colors.onSurfaceVariant ?? "rgba(0,0,0,0.6)";
   const outline = colors.outline ?? "rgba(0,0,0,0.12)";
 
-  // ✅ 왼쪽=좋음 → 오른쪽=안좋음: 화면에서만 역순 사용
+  // ✅ Left = positive → Right = negative (reversed only for UI)
   const OPTIONS = useMemo(() => [...MOOD_OPTIONS].reverse(), []);
 
   const indexByKey = useMemo(() => {
@@ -38,22 +38,19 @@ export default function MoodSection({
   return (
     <Card style={{ borderRadius: 16, backgroundColor: surface }}>
       <Card.Content style={{ gap: 14 }}>
-
-        {/* 큰 아이콘 */}
+        {/* Main mood icon */}
         <View style={{ alignItems: "center", gap: 10, paddingTop: 6 }}>
           <View
             style={{
-              width: 120,
-              height: 120,
+              width: 200,
+              height: 200,
               borderRadius: 28,
-              borderWidth: 1,
-              borderColor: outline,
               alignItems: "center",
               justifyContent: "center",
               backgroundColor: surface,
             }}
           >
-            {Icon ? <Icon width={84} height={84} /> : null}
+            {Icon ? <Icon width={180} height={180} /> : null}
           </View>
 
           <Text style={{ color: onSurface, fontSize: 18, fontWeight: "800" }}>
@@ -61,15 +58,18 @@ export default function MoodSection({
           </Text>
         </View>
 
-        {/* 슬라이더 + 중간 라벨 */}
+        {/* Slider + labels */}
         <View style={{ gap: 10 }}>
           <Slider
             value={currentIndex}
             minimumValue={0}
             maximumValue={OPTIONS.length - 1}
-            step={1} // ✅ 8칸 스냅
+            step={1} // ✅ snap to 8 steps
             onValueChange={(v) => {
-              const idx = Math.max(0, Math.min(OPTIONS.length - 1, Math.round(v)));
+              const idx = Math.max(
+                0,
+                Math.min(OPTIONS.length - 1, Math.round(v))
+              );
               onChange(keyByIndex[idx]);
             }}
             minimumTrackTintColor={colors.primary}
@@ -77,7 +77,7 @@ export default function MoodSection({
             thumbTintColor={colors.primary}
           />
 
-          {/* ✅ 중간중간 기분 이름(8개 전부) */}
+          {/* Mood labels (all 8) */}
           <View
             style={{
               flexDirection: "row",
@@ -90,7 +90,7 @@ export default function MoodSection({
               const active = i === currentIndex;
               return (
                 <View key={m.key} style={{ alignItems: "center", flex: 1 }}>
-                  {/* 작은 tick 느낌 */}
+                  {/* Tick indicator */}
                   <View
                     style={{
                       width: 2,
@@ -117,10 +117,10 @@ export default function MoodSection({
             })}
           </View>
 
-          {/* 좌/우 설명(좋음 → 안좋음) */}
+          {/* Left / Right hint */}
           <View style={{ flexDirection: "row", justifyContent: "space-between" }}>
-            <Text style={{ color: muted, fontWeight: "700" }}>좋음</Text>
-            <Text style={{ color: muted, fontWeight: "700" }}>안좋음</Text>
+            <Text style={{ color: muted, fontWeight: "700" }}>Positive</Text>
+            <Text style={{ color: muted, fontWeight: "700" }}>Negative</Text>
           </View>
         </View>
       </Card.Content>
