@@ -3,6 +3,7 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { KeyboardAvoidingView, Platform, ScrollView, View } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import dayjs from "dayjs";
+
 import {
   Button,
   Dialog,
@@ -19,7 +20,8 @@ import { useAuth } from "../../providers/AuthProvider";
 import { useEntrySession } from "../../query/useEntrySession";
 import { useUserDoc } from "../../query/useUserDoc";
 import { upsertSession, deleteSessionById } from "../../firebase/diaryRepo";
-import { addTopicPreset } from "../../firebase/userRepo";
+import { addTopicPreset, removeTopicPreset } from "../../firebase/userRepo";
+
 import type { EntryId, EntrySlot, ISODate } from "../../core/types";
 import { makeEntryId } from "../../core/types";
 
@@ -156,6 +158,7 @@ export default function EntryScreen() {
     () => cleanTopics((userDoc as any)?.topicPresets ?? []),
     [(userDoc as any)?.topicPresets]
   );
+
   const TOPIC_PRESETS = useMemo(() => {
     return Array.from(new Set([...BASE_TOPIC_PRESETS, ...userPresets]));
   }, [userPresets]);
@@ -235,6 +238,21 @@ export default function EntryScreen() {
     }
   };
 
+  // ✅ preset remove (with selection cleanup)
+  const onRemovePreset = async (t: string) => {
+    if (!user?.uid) return;
+
+    // 선택된 상태면 먼저 UI에서 제거
+    f.setSelectedTopics((prev) => prev.filter((x) => x !== t));
+
+    try {
+      await removeTopicPreset(user.uid, t);
+      qc.invalidateQueries({ queryKey: ["userDoc", user.uid] });
+    } catch (e: any) {
+      showError(e?.message ?? "Failed to remove topic preset");
+    }
+  };
+
   // ---- save/delete ----
   const onSave = async () => {
     if (!user?.uid) return showError("Login required");
@@ -300,7 +318,7 @@ export default function EntryScreen() {
   // year options for web menu
   const yearOptions = useMemo(() => {
     const nowY = dayjs().year();
-    // 현재년 기준 -5 ~ +3 (원하면 늘려)
+    // now -5 ~ +3
     return Array.from({ length: 9 }, (_, i) => nowY - 5 + i);
   }, []);
 
@@ -338,6 +356,8 @@ export default function EntryScreen() {
           onChangeTopicCustom={f.setTopicCustom}
           onToggleTopic={toggleTopic}
           onAddCustomTopic={addCustomTopic}
+          basePresets={BASE_TOPIC_PRESETS}
+          onRemoveTopicPreset={onRemovePreset}
         />
 
         <NoteSection
